@@ -1,0 +1,329 @@
+<html>
+<meta http-equiv="Content-type" content="text/html;charset=UTF-8">
+<head>
+<title>D3.js Dashboard Introduction</title>
+<script src="http://d3js.org/d3.v2.js"></script>
+<script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jquery/1.7.2/jquery.min.js"></script>
+<script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/jqueryui/1.8.21/jquery-ui.min.js"></script>
+<script>
+
+function getMaxObjectValue(metric, graph_metric) {
+  var values = [];
+	for (var i = 0; i < metric.length; i++) {
+		for (var k = 0; k < graph_metric.length; k++) {
+			if (parseFloat(metric[i][""+graph_metric[k]]) < 1) {
+				values.push(parseFloat(metric[i][""+graph_metric[k]]));
+			} else {
+				values.push(Math.ceil(parseFloat(metric[i][""+graph_metric[k]])));
+			}
+		}
+	}
+	values.sort(function(a,b){return a-b});
+	return values[values.length-1];
+}
+
+function getMinObjectValue(metric, graph_metric) {
+	var values = [];
+	for (var i = 0; i < metric.length; i++) {
+		for (var k = 0; k < graph_metric.length; k++) {
+			if (parseFloat(metric[i][""+graph_metric[k]]) < 1) {
+				values.push(parseFloat(metric[i][""+graph_metric[k]]));
+			} else {
+				values.push(Math.floor(parseFloat(metric[i][""+graph_metric[k]])));
+			}
+		}
+	}
+	values.sort(function(a,b){return a-b});
+	return values[0];
+}
+
+function getDate(d) {
+    return new Date(d.date);
+}
+
+function buildLineChart(data, title, graph_metric, width, height, xaxislabel, yaxislabel) {
+	
+	var metric = data.slice(0);
+	metric.splice(0,1);
+
+	// define graph size parameters
+	var margin = {top: 30, right: 20, bottom: 40, left: 60}, width = width - margin.left - margin.right, height = height - margin.top - margin.bottom;
+
+	//color scale for multiple lines
+	var colorscale = d3.scale.category10();
+
+	var minDate = getDate(metric[0]),
+	maxDate = getDate(metric[metric.length-1]),
+	minObjectValue = getMinObjectValue(metric, graph_metric),
+	maxObjectValue = getMaxObjectValue(metric, graph_metric);
+
+	//create the graph object
+	var vis= d3.select("#metrics").append("svg")
+    	.data(metric)
+		.attr("class", "metrics-container")
+   		.attr("width", width + margin.left + margin.right)
+    	.attr("height", height + margin.top + margin.bottom)
+  	.append("g")
+    	.attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+	var y = d3.scale.linear().domain([ minObjectValue - (.1 * minObjectValue) , maxObjectValue + (.1 * maxObjectValue) ]).range([height, 0]),
+	x = d3.time.scale().domain([minDate, maxDate]).range([0, width]);
+
+	var yAxis = d3.svg.axis()
+		.scale(y)
+		.orient("left")
+		.ticks(5);
+	
+	var xAxis = d3.svg.axis()
+		.scale(x)
+		.orient("bottom")
+		.ticks(metric.length-1);
+
+	vis.append("text")
+		.attr("style", "font-family: Helvetica, Arial; font-size: 18px; font-weight: bold;")
+		.attr("dx", function(d) { return 10; })
+		.attr("dy", function(d) { return -10; })
+		.text(''+title);
+
+	//append the axes
+	vis.append("g")
+	    .attr("class", "axis")
+	    .call(yAxis);
+	
+	vis.append("g")
+		.attr("class", "axis")
+	    .attr("transform", "translate(0," + height + ")")
+	    .call(xAxis);
+
+	//add the axes labels
+	vis.append("text")
+	    .attr("class", "axis-label")
+	    .attr("text-anchor", "end")
+	    .attr("x", 20)
+	    .attr("y", height + 34)
+	    .text(xaxislabel);
+
+	vis.append("text")
+	    .attr("class", "axis-label")
+	    .attr("text-anchor", "end")
+	    .attr("y", 6)
+	    .attr("dy", "-3.4em")
+	    .attr("transform", "rotate(-90)")
+	    .text(yaxislabel);
+
+	var lines = [];
+	var circles = [];
+
+	//loop through graph objects, if it's a single graph there will only be one object
+	for (var z = 0; z < graph_metric.length; z++) {
+	
+		lines[z] = d3.svg.line()
+			.x(function(d) { return x(getDate(d)); })
+			.y(function(d) { return (isNaN( y(d[''+graph_metric[z]])) ? 0 : y(d[''+graph_metric[z]])); })
+		
+		vis.append("svg:path")
+			.attr("d", lines[z](metric))
+			.style("stroke", function() { 
+				return colorscale(""+z);
+			})
+			.style("fill", "none")
+			.style("stroke-width", "2.5");
+	
+		var dataCirclesGroup = vis.append('svg:g');
+		
+		var circles = dataCirclesGroup.selectAll('.data-point')
+			.data(metric);
+
+		circles
+			.enter()
+			.append('svg:circle')
+			.attr('class', 'dot')
+			.attr('fill', function() { return colorscale(""+z); })
+			.attr('cx', function(d) { return x(getDate(d)); })
+			.attr('cy', function(d) { return (isNaN( y(d[''+graph_metric[z]])) ? 0 : y(d[''+graph_metric[z]])); })
+			.attr('r', function() { return 3; })
+			.on("mouseover", function(d) {
+  				d3.select(this)
+					.attr("r", 8)
+					.attr("class", "dot-selected")
+					.transition()
+      					.duration(750);
+			})
+			.on("mouseout", function(d) {
+  				d3.select(this)
+					.attr("r", 3)
+					.attr("class", "dot")
+					.transition()
+      					.duration(750);
+			})
+			.append("svg:title")
+   			.text(function(d) { 
+				var return_text = "";
+				if (graph_metric.length > 1) {
+					return_text += graph_metric[z] + "\n";
+				}
+				return_text += $.datepicker.formatDate('yy-mm-dd', new Date(d.date)) + ": ";
+				return_text += Math.round(d[''+graph_metric[z]] * 100) / 100;
+				return return_text;
+			});
+
+	}
+
+}
+
+function safeDivide(num1, num2) {
+	if (isNaN(parseFloat(num2)) || isNaN(parseFloat(num1)) || num2 == 0) {
+		return 0;
+	}
+
+	return Math.round( parseFloat(num1) / parseFloat(num2) * 100 ) / 100;
+}
+
+function createAverages(metric) {
+	for (var i = 1; i < metric.length; i++) {
+		metric[i].d1_retention = safeDivide(metric[i].d1_retention, metric[i].DNU) * 100;
+		metric[i].d7_retention = safeDivide(metric[i].d7_retention, metric[i].DNU) * 100;
+		metric[i].d30_retention = safeDivide(metric[i].d30_retention, metric[i].DNU) * 100;
+
+		metric[i].average_session_length = safeDivide(metric[i].sessions_length, metric[i].sessions) / 60;
+		metric[i].average_sessions_per_user = safeDivide(metric[i].sessions, metric[i].DAU);
+	}
+	return metric;
+}
+
+function getData() {
+	
+	var data = [];
+
+	var metrics = 
+		{"countries": 
+			[
+				{
+					"country": "USA", 
+					"metrics":
+					[
+						{
+							"date"			  : "2012-08-19",
+							"DAU" 			  : 500,
+							"DNU" 			  : 200,
+							"sessions" 		  : 100,
+							"sessions_length" : 2000,
+							"d1_retention"    : 102,
+							"d7_retention"    : 48,
+							"d30_retention"   : 16
+						},
+						{
+							"date"			  : "2012-08-20",
+							"DAU" 			  : 800,
+							"DNU" 			  : 300,
+							"sessions" 		  : 120,
+							"sessions_length" : 4000,
+							"d1_retention"    : 82,
+							"d7_retention"    : 58,
+							"d30_retention"   : 19
+						},
+						{
+							"date"			  : "2012-08-21",
+							"DAU" 			  : 1000,
+							"DNU" 			  : 700,
+							"sessions" 		  : 200,
+							"sessions_length" : 5000,
+							"d1_retention"    : 549,
+							"d7_retention"    : 126,
+							"d30_retention"   : 9
+						}
+					]
+				}
+    		]
+		};
+
+	$.each(metrics.countries, function() {
+		data[0] = this.country;
+				
+		$.each(this.metrics, function() {
+			var metric = this;
+			var temp_date = new Date(this.date);
+	   			var month = temp_date.getMonth();
+				var date = temp_date.getDate();
+	   			var year = temp_date.getFullYear();
+	   		metric.date = month + '/' + date + '/' + year;
+			data.push(metric);
+		});
+	}); 
+
+	return data;
+	
+}
+
+$(document).ready(function() {
+
+	var data = getData();
+
+	data = createAverages(data);
+
+	buildLineChart(data, "Retention", ['d1_retention', 'd7_retention', 'd30_retention'], 1000, 300, "Date", "Retention (percentage)");
+	buildLineChart(data, "Daily New Users", ['DNU'], 500, 300, "Date", "New Users");
+	buildLineChart(data, "Daily Active Users", ['DAU'], 500, 300, "Date", "Users");
+	buildLineChart(data, "Average Session Length", ['average_session_length'], 500, 300, "Date", "Session Length (minutes)");
+	buildLineChart(data, "Average Sessions per User", ['average_sessions_per_user'], 500, 300, "Date", "Sessions per User");
+
+
+});
+
+</script>
+
+<style>
+.axis path, .axis line {
+  fill: none;
+  stroke: #000;
+  shape-rendering: crispEdges;
+}
+
+.line {
+  fill: none;
+  stroke-width: 1.5px;
+
+}
+
+body { 
+	background: #FFFFFF; 
+	background-repeat:repeat-x;
+	text-align: center;
+	font: 10px sans-serif;
+}
+
+.dot {
+
+  stroke-width: 1.5px;
+}
+
+.dot-selected {
+  fill: #B0C4DE;
+  stroke: #B0C4DE;
+  stroke-width: 1.5px;
+}
+
+.metrics-container {
+	width: auto;
+	height: auto;
+	padding: 10px 10px 10px 10px;
+	border-style: solid;
+	border-width: 1px;
+	float: left;
+	margin-left: 20px;
+	margin-top: 20px;
+}
+</style>
+
+</head>
+
+<body>
+
+	<h1>A D3.js Dashboard</h1>
+
+	<div id="metrics">
+	</div>
+
+</body>
+
+</html>
