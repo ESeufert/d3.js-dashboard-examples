@@ -1,4 +1,4 @@
 d3.js-dashboard-examples
 ========================
 
-D3.js Dashboard Examples
+Some dashboard examples created with D3.js. Feel free to edit / manipulate in any way you wish.
